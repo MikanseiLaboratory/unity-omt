@@ -22,6 +22,8 @@ Or copy `Packages/org.openmediatransport.unity` into your project's `Packages` f
 
 Windows may prompt for firewall access the first time a sender or receiver starts. Allow local network traffic for discovery and media.
 
+The Git repository is also a Unity 2022.3 sample project. Open it and play `Assets/Scenes/Loopback.unity`.
+
 ## Quick start
 
 ### Receive

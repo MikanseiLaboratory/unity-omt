@@ -12,6 +12,14 @@ This loads `libomt`/`libvmx`, checks the `OmtMediaFrame` ABI, and loopbacks BGRA
 
 Windows x64 result (2026-08-17): **PASS** after using a dedicated port. Pixel values differ slightly because VMX is lossy.
 
+## Sample scenes
+
+Open this repository in Unity 2022.3 and play:
+
+- `Assets/Scenes/Loopback.unity` — same-Player send/receive
+- `Assets/Scenes/Sender.unity` — publishes `Unity Sender`
+- `Assets/Scenes/Receiver.unity` — pick a discovered source
+
 ## Unity Player matrix
 
 Unity 2022.3 is not present in this workspace, so Player runs are scripted for a machine that has the editor installed.
