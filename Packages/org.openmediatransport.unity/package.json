@@ -1,0 +1,40 @@
+{
+  "name": "org.openmediatransport.unity",
+  "version": "0.1.0",
+  "displayName": "Open Media Transport",
+  "description": "Send and receive Open Media Transport video and metadata in Unity on Windows and macOS.",
+  "unity": "2022.3",
+  "author": {
+    "name": "Open Media Transport Contributors"
+  },
+  "license": "MIT",
+  "documentationUrl": "https://github.com/MikanseiLaboratory/unity-omt",
+  "changelogUrl": "https://github.com/MikanseiLaboratory/unity-omt/blob/main/Packages/org.openmediatransport.unity/CHANGELOG.md",
+  "licensesUrl": "https://github.com/MikanseiLaboratory/unity-omt/blob/main/Packages/org.openmediatransport.unity/LICENSE.md",
+  "keywords": [
+    "omt",
+    "video",
+    "network",
+    "ndi-alternative"
+  ],
+  "dependencies": {
+    "com.unity.modules.screencapture": "1.0.0"
+  },
+  "samples": [
+    {
+      "displayName": "Receiver",
+      "description": "Receive an OMT source onto a Renderer or RenderTexture.",
+      "path": "Samples~/Receiver"
+    },
+    {
+      "displayName": "Sender",
+      "description": "Send Game View, Camera, or Texture output as an OMT source.",
+      "path": "Samples~/Sender"
+    },
+    {
+      "displayName": "Loopback",
+      "description": "Send and receive inside the same Unity Player.",
+      "path": "Samples~/Loopback"
+    }
+  ]
+}

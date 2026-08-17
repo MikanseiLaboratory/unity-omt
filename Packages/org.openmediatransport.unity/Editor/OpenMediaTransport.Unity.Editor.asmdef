@@ -1,0 +1,19 @@
+{
+    "name": "OpenMediaTransport.Unity.Editor",
+    "rootNamespace": "OpenMediaTransport.Editor",
+    "references": [
+        "OpenMediaTransport.Unity.Runtime",
+        "OpenMediaTransport.Unity.Interop"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

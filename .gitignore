@@ -1,0 +1,15 @@
+Library/
+Temp/
+Logs/
+Obj/
+Build/
+UserSettings/
+/*.csproj
+/*.sln
+*.user
+!Tools~/**/*.csproj
+.vs/
+.idea/
+Tools~/tmp/
+Tools~/NativeSpike/bin/
+Tools~/NativeSpike/obj/

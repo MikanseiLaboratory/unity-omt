@@ -1,0 +1,26 @@
+{
+    "name": "OpenMediaTransport.Unity.Runtime",
+    "rootNamespace": "OpenMediaTransport",
+    "references": [
+        "OpenMediaTransport.Unity.Interop"
+    ],
+    "includePlatforms": [
+        "Editor",
+        "WindowsStandalone64",
+        "macOSStandalone"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": true,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [
+        {
+            "name": "com.unity.render-pipelines.core",
+            "expression": "0.0.0",
+            "define": "OMT_HAS_SRP"
+        }
+    ],
+    "noEngineReferences": false
+}
