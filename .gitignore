@@ -19,9 +19,13 @@ Tools~/NativeSpike/obj/
 .github/.github
 .github/workflows/workflows
 Assets/Assets
+Assets/Assets.meta
 Assets/Materials/Materials
+Assets/Materials/Materials.meta
 Assets/Scenes/Scenes
+Assets/Scenes/Scenes.meta
 Assets/Scripts/Scripts
+Assets/Scripts/Scripts.meta
 Packages/Packages
 Packages/org.openmediatransport.unity/org.openmediatransport.unity
 Packages/org.openmediatransport.unity/Documentation~/Documentation~
