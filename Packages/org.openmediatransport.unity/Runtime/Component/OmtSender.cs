@@ -29,6 +29,7 @@ namespace OpenMediaTransport
 
         string _runtimeName;
         OmtCaptureMethod _runtimeMethod;
+        bool _methodReady;
         OmtSendHandle _handle;
         bool _runtimeHeld;
         OmtFormatConverter _converter;
@@ -38,6 +39,8 @@ namespace OpenMediaTransport
         string _metadata;
         long _timestamp = 1;
         float _lastReadbackTime;
+        int _lastCaptureWidth;
+        int _lastCaptureHeight;
 
         public string omtName
         {
@@ -72,13 +75,14 @@ namespace OpenMediaTransport
 
         public OmtCaptureMethod captureMethod
         {
-            get => _runtimeMethod;
+            get => _methodReady ? _runtimeMethod : _captureMethod;
             set
             {
                 _captureMethod = value;
-                if (_runtimeMethod == value)
+                if (_methodReady && _runtimeMethod == value)
                     return;
                 _runtimeMethod = value;
+                _methodReady = true;
                 if (_handle != null && isActiveAndEnabled)
                     Restart();
             }
@@ -89,8 +93,11 @@ namespace OpenMediaTransport
             get => _sourceCamera;
             set
             {
+                if (_sourceCamera == value)
+                    return;
                 _sourceCamera = value;
-                ResetState();
+                if (Application.isPlaying && isActiveAndEnabled)
+                    ResetState();
             }
         }
 
@@ -167,22 +174,31 @@ namespace OpenMediaTransport
 
             _runtimeName = _omtName;
             _runtimeMethod = _captureMethod;
+            _methodReady = true;
         }
 #else
         void Awake()
         {
             _runtimeName = _omtName;
             _runtimeMethod = _captureMethod;
+            _methodReady = true;
         }
 #endif
 
         void OnEnable()
         {
+            EnsureRuntimeMethod();
             if (!Application.isPlaying)
                 return;
-            if (_runtimeMethod != _captureMethod && _handle == null)
-                _runtimeMethod = _captureMethod;
             ResetState();
+        }
+
+        void Start()
+        {
+            if (!Application.isPlaying || !isActiveAndEnabled)
+                return;
+            if (_handle == null || _handle.IsInvalid)
+                ResetState();
         }
 
         void OnDisable() => Restart(false);
@@ -210,9 +226,18 @@ namespace OpenMediaTransport
                 ResetState();
         }
 
+        void EnsureRuntimeMethod()
+        {
+            if (_methodReady)
+                return;
+            _runtimeMethod = _captureMethod;
+            _methodReady = true;
+        }
+
         void ResetState()
         {
             StopCapture();
+            EnsureRuntimeMethod();
             if (!Application.isPlaying || !isActiveAndEnabled)
                 return;
             if (_resources == null)
@@ -294,28 +319,45 @@ namespace OpenMediaTransport
             _lastReadbackTime = Time.realtimeSinceStartup;
             while (enabled)
             {
+                // WaitForEndOfFrame never completes while the Game View is not presenting
+                // (Unity in the background, or Test Patterns in front).
                 if (captureMethod == OmtCaptureMethod.GameView)
+                {
+                    if (!Application.isFocused)
+                    {
+                        yield return null;
+                        continue;
+                    }
                     yield return eof;
+                }
                 else
                     yield return null;
+
                 if (!Application.isPlaying || _handle == null || _handle.IsInvalid)
                     continue;
-                if (_pool != null && _pool.InFlight >= OmtReadbackPool.Capacity &&
+                if (_pool != null && _pool.InFlight > 0 &&
                     Time.realtimeSinceStartup - _lastReadbackTime > 1f)
                     RecoverReadbacks();
 
-                switch (captureMethod)
+                try
                 {
-                    case OmtCaptureMethod.Texture:
-                        if (_sourceTexture != null)
-                            CaptureTexture(_sourceTexture, true);
-                        break;
-                    case OmtCaptureMethod.Camera:
-                        CaptureCamera();
-                        break;
-                    default:
-                        CaptureGameView();
-                        break;
+                    switch (captureMethod)
+                    {
+                        case OmtCaptureMethod.Texture:
+                            if (_sourceTexture != null)
+                                CaptureTexture(_sourceTexture, true);
+                            break;
+                        case OmtCaptureMethod.Camera:
+                            CaptureCamera();
+                            break;
+                        default:
+                            CaptureGameView();
+                            break;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Debug.LogException(ex, this);
                 }
             }
         }
@@ -332,14 +374,22 @@ namespace OpenMediaTransport
 
         void CaptureCamera()
         {
-            var camera = _sourceCamera;
-            if (camera == null || !camera.isActiveAndEnabled)
+            var camera = _sourceCamera != null ? _sourceCamera : Camera.main;
+            if (camera == null)
                 return;
 
-            var srcW = camera.pixelWidth > 0 ? camera.pixelWidth : Screen.width;
-            var srcH = camera.pixelHeight > 0 ? camera.pixelHeight : Screen.height;
-            if (srcW < 1 || srcH < 1)
-                return;
+            var srcW = camera.pixelWidth;
+            var srcH = camera.pixelHeight;
+            if (srcW < 16)
+                srcW = Screen.width;
+            if (srcH < 16)
+                srcH = Screen.height;
+            if (srcW < 16)
+                srcW = _lastCaptureWidth > 0 ? _lastCaptureWidth : 1280;
+            if (srcH < 16)
+                srcH = _lastCaptureHeight > 0 ? _lastCaptureHeight : 720;
+            _lastCaptureWidth = srcW;
+            _lastCaptureHeight = srcH;
 
             OmtFormatConverter.AlignVmxSize(srcW, srcH, out var width, out var height);
             if (!EnsureCameraRt(width, height))
@@ -383,6 +433,10 @@ namespace OpenMediaTransport
             if (_handle == null || _handle.IsInvalid || _converter == null || _pool == null)
                 return;
             if (texture == null || texture.width < 1 || texture.height < 1)
+                return;
+            // The encoder writes a single ComputeBuffer. Overwriting it while a readback
+            // is in flight makes AsyncGPUReadback fail, so no video frames are sent.
+            if (_pool.InFlight > 0)
                 return;
             var buffer = _converter.Encode(texture, vflip, out var width, out var height);
             if (!_pool.TryBegin(width, height, _metadata, buffer, OnReadback, null))
