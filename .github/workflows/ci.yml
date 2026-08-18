@@ -1,0 +1,39 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  native-spike:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+      - name: Validate plugin hashes
+        shell: pwsh
+        run: ./Tools~/scripts/ValidatePlugins.ps1 -PackageRoot Packages/org.openmediatransport.unity
+      - name: Native loopback spike
+        shell: pwsh
+        run: dotnet run --project "Tools~/NativeSpike/NativeSpike.csproj" -c Release
+
+  package-layout:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check UPM files
+        run: |
+          test -f Packages/org.openmediatransport.unity/package.json
+          test -f Packages/org.openmediatransport.unity/Runtime/OpenMediaTransport.Unity.Runtime.asmdef
+          test -f Packages/org.openmediatransport.unity/Runtime/Interop/OpenMediaTransport.Unity.Interop.asmdef
+          test -f Packages/org.openmediatransport.unity/Editor/OpenMediaTransport.Unity.Editor.asmdef
+          python3 - <<'PY'
+          import json
+          data=json.load(open("Packages/org.openmediatransport.unity/package.json"))
+          assert data["name"]=="org.openmediatransport.unity"
+          assert data["unity"]=="2022.3"
+          assert data["version"]=="0.1.0"
+          PY

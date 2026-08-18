@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <RootNamespace>OpenMediaTransport.NativeSpike</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="..\..\Packages\org.openmediatransport.unity\Runtime\Interop\*.cs" Link="Interop\%(Filename)%(Extension)" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="..\..\Packages\org.openmediatransport.unity\Runtime\Plugins\Windows\x86_64\libomt.dll" CopyToOutputDirectory="PreserveNewest" Condition="$([MSBuild]::IsOSPlatform('Windows'))" />
+    <None Include="..\..\Packages\org.openmediatransport.unity\Runtime\Plugins\Windows\x86_64\libvmx.dll" CopyToOutputDirectory="PreserveNewest" Condition="$([MSBuild]::IsOSPlatform('Windows'))" />
+    <None Include="..\..\Packages\org.openmediatransport.unity\Runtime\Plugins\macOS\libomt.dylib" CopyToOutputDirectory="PreserveNewest" Condition="$([MSBuild]::IsOSPlatform('OSX'))" />
+    <None Include="..\..\Packages\org.openmediatransport.unity\Runtime\Plugins\macOS\libvmx.dylib" CopyToOutputDirectory="PreserveNewest" Condition="$([MSBuild]::IsOSPlatform('OSX'))" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,78 @@
+#pragma kernel DecodeGamma
+#pragma kernel DecodeLinear
+#pragma kernel EncodeGamma
+#pragma kernel EncodeLinear
+
+Texture2D<float4> Source;
+RWStructuredBuffer<uint> Encoded;
+StructuredBuffer<uint> EncodedIn;
+RWTexture2D<float4> Destination;
+uint Width;
+uint Height;
+float VFlip;
+
+float3 LinearToSrgb(float3 c)
+{
+    return pow(max(c, 0), 1.0 / 2.2);
+}
+
+float3 SrgbToLinear(float3 c)
+{
+    return pow(max(c, 0), 2.2);
+}
+
+uint PackBGRA(float4 c)
+{
+    uint b = (uint)(saturate(c.b) * 255.0 + 0.5);
+    uint g = (uint)(saturate(c.g) * 255.0 + 0.5);
+    uint r = (uint)(saturate(c.r) * 255.0 + 0.5);
+    uint a = (uint)(saturate(c.a) * 255.0 + 0.5);
+    return b | (g << 8) | (r << 16) | (a << 24);
+}
+
+float4 UnpackBGRA(uint p)
+{
+    float b = (p & 255) / 255.0;
+    float g = ((p >> 8) & 255) / 255.0;
+    float r = ((p >> 16) & 255) / 255.0;
+    float a = ((p >> 24) & 255) / 255.0;
+    return float4(r, g, b, a);
+}
+
+uint SampleY(uint y)
+{
+    return VFlip > 0.5 ? (Height - 1 - y) : y;
+}
+
+[numthreads(8, 8, 1)]
+void EncodeGamma(uint3 id : SV_DispatchThreadID)
+{
+    if (id.x >= Width || id.y >= Height) return;
+    Encoded[id.y * Width + id.x] = PackBGRA(Source[uint2(id.x, SampleY(id.y))]);
+}
+
+[numthreads(8, 8, 1)]
+void EncodeLinear(uint3 id : SV_DispatchThreadID)
+{
+    if (id.x >= Width || id.y >= Height) return;
+    float4 c = Source[uint2(id.x, SampleY(id.y))];
+    c.rgb = LinearToSrgb(c.rgb);
+    Encoded[id.y * Width + id.x] = PackBGRA(c);
+}
+
+[numthreads(8, 8, 1)]
+void DecodeGamma(uint3 id : SV_DispatchThreadID)
+{
+    if (id.x >= Width || id.y >= Height) return;
+    float4 c = UnpackBGRA(EncodedIn[id.y * Width + id.x]);
+    Destination[uint2(id.x, SampleY(id.y))] = c;
+}
+
+[numthreads(8, 8, 1)]
+void DecodeLinear(uint3 id : SV_DispatchThreadID)
+{
+    if (id.x >= Width || id.y >= Height) return;
+    float4 c = UnpackBGRA(EncodedIn[id.y * Width + id.x]);
+    c.rgb = SrgbToLinear(c.rgb);
+    Destination[uint2(id.x, SampleY(id.y))] = c;
+}
