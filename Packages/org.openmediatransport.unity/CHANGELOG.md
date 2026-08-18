@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Added
+- Point native libomt file logs at the official OMT storage path (`%ProgramData%\OMT\logs` on Windows, `~/.OMT/logs` on macOS / Linux, or `OMT_STORAGE_PATH`).
+
 ### Fixed
 - Preload `libvmx` from the plugin directory so Native AOT send/receive can resolve the codec DLL in the Unity Editor and Players.
 - Snap sender frames to even dimensions of at least 16x16 before VMX encode. Game View Free Aspect sizes were odd, so `VMX_Create` returned null and every `SendVideo` logged `Encoding failed`.
