@@ -18,7 +18,6 @@ namespace OpenMediaTransport.Samples
             if (receiver == null)
                 receiver = gameObject.AddComponent<OmtReceiver>();
             sender.omtName = sourceName;
-            sender.captureMethod = OmtCaptureMethod.GameView;
             if (target != null)
                 receiver.targetRenderer = target;
         }

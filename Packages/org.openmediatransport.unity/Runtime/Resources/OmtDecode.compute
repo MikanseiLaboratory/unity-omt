@@ -4,6 +4,7 @@
 #pragma kernel EncodeLinear
 
 Texture2D<float4> Source;
+SamplerState sampler_point_clamp;
 RWStructuredBuffer<uint> Encoded;
 StructuredBuffer<uint> EncodedIn;
 RWTexture2D<float4> Destination;
@@ -44,19 +45,24 @@ uint SampleY(uint y)
     return VFlip > 0.5 ? (Height - 1 - y) : y;
 }
 
+float4 SampleSource(uint2 pixel)
+{
+    float2 uv = (float2(pixel) + 0.5) / float2(Width, Height);
+    return Source.SampleLevel(sampler_point_clamp, uv, 0);
+}
+
 [numthreads(8, 8, 1)]
 void EncodeGamma(uint3 id : SV_DispatchThreadID)
 {
     if (id.x >= Width || id.y >= Height) return;
-    float4 c = Source[uint2(id.x, SampleY(id.y))];
-    Encoded[id.y * Width + id.x] = PackBGRA(c);
+    Encoded[id.y * Width + id.x] = PackBGRA(SampleSource(uint2(id.x, SampleY(id.y))));
 }
 
 [numthreads(8, 8, 1)]
 void EncodeLinear(uint3 id : SV_DispatchThreadID)
 {
     if (id.x >= Width || id.y >= Height) return;
-    float4 c = Source[uint2(id.x, SampleY(id.y))];
+    float4 c = SampleSource(uint2(id.x, SampleY(id.y)));
     c.rgb = LinearToSrgb(c.rgb);
     Encoded[id.y * Width + id.x] = PackBGRA(c);
 }

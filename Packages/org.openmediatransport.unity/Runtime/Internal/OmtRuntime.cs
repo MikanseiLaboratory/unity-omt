@@ -21,6 +21,7 @@ namespace OpenMediaTransport
                 _references = 0;
                 _initialized = false;
                 _loggingCallback = null;
+                OmtNativeLibraries.Reset();
             }
         }
 
@@ -75,6 +76,8 @@ namespace OpenMediaTransport
             if (_initialized)
                 return;
 
+            OmtNativeLibraries.EnsureLoaded(logFailure: false);
+
             _loggingCallback = OnNativeLog;
             try
             {
@@ -84,6 +87,8 @@ namespace OpenMediaTransport
             {
             }
 
+            OmtNativeLibraries.EnsureLoaded(logFailure: true);
+            Application.runInBackground = true;
             _initialized = true;
         }
 

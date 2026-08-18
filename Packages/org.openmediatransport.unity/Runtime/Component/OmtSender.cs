@@ -2,7 +2,6 @@ using System;
 using System.Collections;
 using OpenMediaTransport.Interop;
 using UnityEngine;
-using UnityEngine.Rendering;
 
 namespace OpenMediaTransport
 {
@@ -33,11 +32,11 @@ namespace OpenMediaTransport
         bool _runtimeHeld;
         OmtFormatConverter _converter;
         OmtReadbackPool _pool;
-        CommandBuffer _cameraBuffer;
-        Camera _attachedCamera;
+        RenderTexture _cameraRt;
         IntPtr _metadataPtr;
         string _metadata;
         long _timestamp = 1;
+        float _lastReadbackTime;
 
         public string omtName
         {
@@ -47,7 +46,8 @@ namespace OpenMediaTransport
                 if (_runtimeName == value)
                     return;
                 _omtName = _runtimeName = value;
-                Restart();
+                if (_handle != null && isActiveAndEnabled)
+                    Restart();
             }
         }
 
@@ -74,10 +74,12 @@ namespace OpenMediaTransport
             get => _runtimeMethod;
             set
             {
+                _captureMethod = value;
                 if (_runtimeMethod == value)
                     return;
-                _captureMethod = _runtimeMethod = value;
-                Restart();
+                _runtimeMethod = value;
+                if (_handle != null && isActiveAndEnabled)
+                    Restart();
             }
         }
 
@@ -152,17 +154,50 @@ namespace OpenMediaTransport
 
 #if UNITY_EDITOR
         void OnValidate()
+        {
+            if (Application.isPlaying && _handle != null && isActiveAndEnabled)
+            {
+                if (_runtimeName != _omtName)
+                    omtName = _omtName;
+                if (_runtimeMethod != _captureMethod)
+                    captureMethod = _captureMethod;
+                return;
+            }
+
+            _runtimeName = _omtName;
+            _runtimeMethod = _captureMethod;
+        }
 #else
         void Awake()
-#endif
         {
-            omtName = _omtName;
-            captureMethod = _captureMethod;
+            _runtimeName = _omtName;
+            _runtimeMethod = _captureMethod;
+        }
+#endif
+
+        void OnEnable()
+        {
+            if (!Application.isPlaying)
+                return;
+            if (_runtimeMethod != _captureMethod && _handle == null)
+                _runtimeMethod = _captureMethod;
+            ResetState();
         }
 
-        void OnEnable() => ResetState();
         void OnDisable() => Restart(false);
         void OnDestroy() => Restart(false);
+
+        void OnApplicationFocus(bool focus)
+        {
+            if (focus)
+                RecoverReadbacks();
+        }
+
+        void OnApplicationPause(bool pause)
+        {
+            if (!pause)
+                RecoverReadbacks();
+        }
 
         internal void Restart() => Restart(isActiveAndEnabled);
 
@@ -177,7 +212,7 @@ namespace OpenMediaTransport
         void ResetState()
         {
             StopCapture();
-            if (!isActiveAndEnabled)
+            if (!Application.isPlaying || !isActiveAndEnabled)
                 return;
             if (_resources == null)
                 _resources = OmtResources.LoadDefault();
@@ -188,10 +223,7 @@ namespace OpenMediaTransport
             }
 
             PrepareSender();
-            if (captureMethod == OmtCaptureMethod.Camera)
-                AttachCamera();
-            else
-                StartCoroutine(CaptureCoroutine());
+            StartCoroutine(CaptureCoroutine());
         }
 
         void PrepareSender()
@@ -233,6 +265,7 @@ namespace OpenMediaTransport
             _pool = null;
             _converter?.Dispose();
             _converter = null;
+            ReleaseCameraRt();
             _handle?.Dispose();
             _handle = null;
             RebuildMetadataPointer(true);
@@ -246,100 +279,113 @@ namespace OpenMediaTransport
         void StopCapture()
         {
             StopAllCoroutines();
-            DetachCamera();
+        }
+
+        void RecoverReadbacks()
+        {
+            _pool?.Recover();
+            _lastReadbackTime = Time.realtimeSinceStartup;
         }
 
         IEnumerator CaptureCoroutine()
         {
             var eof = new WaitForEndOfFrame();
+            _lastReadbackTime = Time.realtimeSinceStartup;
             while (enabled)
             {
-                yield return eof;
-                if (captureMethod == OmtCaptureMethod.Texture && _sourceTexture != null)
-                    CaptureTexture(_sourceTexture, true);
-                else if (captureMethod == OmtCaptureMethod.GameView)
-                    CaptureGameView();
+                if (captureMethod == OmtCaptureMethod.GameView)
+                    yield return eof;
+                else
+                    yield return null;
+                if (!Application.isPlaying || _handle == null || _handle.IsInvalid)
+                    continue;
+                if (_pool != null && _pool.InFlight >= OmtReadbackPool.Capacity &&
+                    Time.realtimeSinceStartup - _lastReadbackTime > 1f)
+                    RecoverReadbacks();
+
+                switch (captureMethod)
+                {
+                    case OmtCaptureMethod.Texture:
+                        if (_sourceTexture != null)
+                            CaptureTexture(_sourceTexture, true);
+                        break;
+                    case OmtCaptureMethod.Camera:
+                        CaptureCamera();
+                        break;
+                    default:
+                        CaptureGameView();
+                        break;
+                }
             }
         }
 
         void CaptureGameView()
         {
+            if (Screen.width < 1 || Screen.height < 1)
+                return;
             var rt = RenderTexture.GetTemporary(Screen.width, Screen.height, 0);
             ScreenCapture.CaptureScreenshotIntoRenderTexture(rt);
             CaptureTexture(rt, false);
             RenderTexture.ReleaseTemporary(rt);
         }
 
+        void CaptureCamera()
+        {
+            var camera = _sourceCamera;
+            if (camera == null || !camera.isActiveAndEnabled)
+                return;
+
+            var srcW = camera.pixelWidth > 0 ? camera.pixelWidth : Screen.width;
+            var srcH = camera.pixelHeight > 0 ? camera.pixelHeight : Screen.height;
+            if (srcW < 1 || srcH < 1)
+                return;
+
+            OmtFormatConverter.AlignVmxSize(srcW, srcH, out var width, out var height);
+            if (!EnsureCameraRt(width, height))
+                return;
+
+            var previousTarget = camera.targetTexture;
+            var previousActive = RenderTexture.active;
+            camera.targetTexture = _cameraRt;
+            camera.Render();
+            camera.targetTexture = previousTarget;
+            RenderTexture.active = previousActive;
+            CaptureTexture(_cameraRt, true);
+        }
+
+        bool EnsureCameraRt(int width, int height)
+        {
+            if (_cameraRt != null && _cameraRt.width == width && _cameraRt.height == height)
+                return true;
+            ReleaseCameraRt();
+            _cameraRt = new RenderTexture(width, height, 24, RenderTextureFormat.ARGB32)
+            {
+                antiAliasing = 1,
+                hideFlags = HideFlags.DontSave,
+                filterMode = FilterMode.Point,
+                name = "OMT Camera Capture"
+            };
+            return _cameraRt.Create();
+        }
+
+        void ReleaseCameraRt()
+        {
+            if (_cameraRt == null)
+                return;
+            _cameraRt.Release();
+            Destroy(_cameraRt);
+            _cameraRt = null;
+        }
+
         void CaptureTexture(Texture texture, bool vflip)
         {
             if (_handle == null || _handle.IsInvalid || _converter == null || _pool == null)
                 return;
-            var buffer = _converter.Encode(texture, vflip);
-            if (!_pool.TryBegin(texture.width, texture.height, _metadata, buffer, OnReadback, null))
+            if (texture == null || texture.width < 1 || texture.height < 1)
                 return;
-        }
-
-        void AttachCamera()
-        {
-            if (_sourceCamera == null)
+            var buffer = _converter.Encode(texture, vflip, out var width, out var height);
+            if (!_pool.TryBegin(width, height, _metadata, buffer, OnReadback, null))
                 return;
-            _attachedCamera = _sourceCamera;
-
-#if OMT_HAS_SRP
-            RenderPipelineManager.endCameraRendering += OnEndCameraRendering;
-#endif
-            if (GraphicsSettings.currentRenderPipeline == null)
-            {
-                _cameraBuffer = new CommandBuffer { name = "OMT Camera Capture" };
-                _attachedCamera.AddCommandBuffer(CameraEvent.AfterEverything, _cameraBuffer);
-                Camera.onPostRender += OnBuiltinPostRender;
-            }
-        }
-
-        void DetachCamera()
-        {
-#if OMT_HAS_SRP
-            RenderPipelineManager.endCameraRendering -= OnEndCameraRendering;
-#endif
-            Camera.onPostRender -= OnBuiltinPostRender;
-            if (_attachedCamera != null && _cameraBuffer != null)
-                _attachedCamera.RemoveCommandBuffer(CameraEvent.AfterEverything, _cameraBuffer);
-            _cameraBuffer?.Release();
-            _cameraBuffer = null;
-            _attachedCamera = null;
-        }
-
-#if OMT_HAS_SRP
-        void OnEndCameraRendering(ScriptableRenderContext context, Camera camera)
-        {
-            if (camera != _attachedCamera)
-                return;
-            var cmd = new CommandBuffer { name = "OMT SRP Capture" };
-            EncodeFromCamera(cmd, camera);
-            context.ExecuteCommandBuffer(cmd);
-            cmd.Release();
-        }
-#endif
-
-        void OnBuiltinPostRender(Camera camera)
-        {
-            if (camera != _attachedCamera || _cameraBuffer == null)
-                return;
-            _cameraBuffer.Clear();
-            EncodeFromCamera(_cameraBuffer, camera);
-        }
-
-        void EncodeFromCamera(CommandBuffer cmd, Camera camera)
-        {
-            if (_converter == null || _pool == null)
-                return;
-            var w = camera.pixelWidth;
-            var h = camera.pixelHeight;
-            var target = camera.targetTexture != null
-                ? (RenderTargetIdentifier)camera.targetTexture
-                : BuiltinRenderTextureType.CameraTarget;
-            var buffer = _converter.Encode(cmd, target, w, h, true);
-            _pool.TryBegin(w, h, _metadata, buffer, OnReadback, cmd);
         }
 
         void OnReadback(AsyncGPUReadbackRequest request, OmtReadbackEntry entry)
@@ -348,6 +394,8 @@ namespace OpenMediaTransport
             {
                 if (request.hasError || _handle == null || _handle.IsInvalid || entry == null || !entry.Pixels.IsCreated)
                     return;
+
+                _lastReadbackTime = Time.realtimeSinceStartup;
 
                 var metadata = entry.Metadata;
                 IntPtr metaPtr = IntPtr.Zero;

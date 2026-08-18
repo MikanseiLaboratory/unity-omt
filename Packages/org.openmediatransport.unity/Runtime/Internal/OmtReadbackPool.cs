@@ -83,6 +83,14 @@ namespace OpenMediaTransport
                 _inFlight--;
         }
 
+        internal void Recover()
+        {
+            AsyncGPUReadback.WaitAllRequests();
+            foreach (var entry in _entries)
+                entry.Release();
+            _inFlight = 0;
+        }
+
         public void Dispose()
         {
             AsyncGPUReadback.WaitAllRequests();

@@ -42,7 +42,8 @@ namespace OpenMediaTransport
                 if (_runtimeName == value)
                     return;
                 _omtName = _runtimeName = value;
-                Restart();
+                if (_handle != null && isActiveAndEnabled)
+                    Restart();
             }
         }
 
@@ -125,15 +126,27 @@ namespace OpenMediaTransport
 
 #if UNITY_EDITOR
         void OnValidate()
+        {
+            if (Application.isPlaying && _handle != null && isActiveAndEnabled)
+            {
+                if (_runtimeName != _omtName)
+                    omtName = _omtName;
+                return;
+            }
+
+            _runtimeName = _omtName;
+        }
 #else
         void Awake()
-#endif
         {
-            omtName = _omtName;
+            _runtimeName = _omtName;
         }
+#endif
 
         void OnEnable()
         {
+            if (!Application.isPlaying)
+                return;
             if (_resources == null)
                 _resources = OmtResources.LoadDefault();
             StartReceiver();

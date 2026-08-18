@@ -16,9 +16,12 @@ namespace OpenMediaTransport.Samples
             if (sender == null)
                 sender = gameObject.AddComponent<OmtSender>();
             sender.captureMethod = method;
-            sender.sourceCamera = sourceCamera;
-            sender.sourceTexture = sourceTexture;
-            sender.omtName = string.IsNullOrEmpty(sender.omtName) ? "Unity Sender" : sender.omtName;
+            if (sourceCamera != null)
+                sender.sourceCamera = sourceCamera;
+            if (sourceTexture != null)
+                sender.sourceTexture = sourceTexture;
+            if (string.IsNullOrEmpty(sender.omtName))
+                sender.omtName = "Unity Sender";
         }
     }
 }

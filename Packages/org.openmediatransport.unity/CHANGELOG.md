@@ -1,5 +1,13 @@
 # Changelog
 
+## [Unreleased]
+
+### Fixed
+- Preload `libvmx` from the plugin directory so Native AOT send/receive can resolve the codec DLL in the Unity Editor and Players.
+- Snap sender frames to even dimensions of at least 16x16 before VMX encode. Game View Free Aspect sizes were odd, so `VMX_Create` returned null and every `SendVideo` logged `Encoding failed`.
+- Blit Camera / Game View into a resolved linear RT before compute encode. Direct `Texture2D` loads from `CameraTarget` and screenshot RTs were sampling black.
+- Keep sending while Unity is unfocused: enable `runInBackground`, render Camera capture to an offscreen RT instead of Game View events, and recover stalled GPU readbacks. Inspector `OnValidate` no longer tears down a live sender.
+
 ## [0.1.0] - 2026-08-17
 
 ### Added
