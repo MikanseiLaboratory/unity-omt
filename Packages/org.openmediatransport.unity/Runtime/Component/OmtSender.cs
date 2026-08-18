@@ -2,6 +2,7 @@ using System;
 using System.Collections;
 using OpenMediaTransport.Interop;
 using UnityEngine;
+using UnityEngine.Rendering;
 
 namespace OpenMediaTransport
 {
