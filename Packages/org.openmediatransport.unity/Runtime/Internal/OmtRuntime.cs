@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using System.Runtime.InteropServices;
 using OpenMediaTransport.Interop;
 using UnityEngine;
@@ -77,6 +78,7 @@ namespace OpenMediaTransport
                 return;
 
             OmtNativeLibraries.EnsureLoaded(logFailure: false);
+            BindNativeLogFile();
 
             _loggingCallback = OnNativeLog;
             try
@@ -90,6 +92,30 @@ namespace OpenMediaTransport
             OmtNativeLibraries.EnsureLoaded(logFailure: true);
             Application.runInBackground = true;
             _initialized = true;
+        }
+
+        private static void BindNativeLogFile()
+        {
+            try
+            {
+                Directory.CreateDirectory(OmtStorage.LogsDirectory());
+                var path = OmtUtf8.Alloc(OmtStorage.DefaultLogFilePath());
+                try
+                {
+                    OmtNative.omt_setloggingfilename(path);
+                }
+                finally
+                {
+                    OmtUtf8.Free(path);
+                }
+            }
+            catch (EntryPointNotFoundException)
+            {
+            }
+            catch (Exception ex)
+            {
+                Debug.LogWarning("[OMT] failed to open log file: " + ex.Message);
+            }
         }
 
         private static void Shutdown()

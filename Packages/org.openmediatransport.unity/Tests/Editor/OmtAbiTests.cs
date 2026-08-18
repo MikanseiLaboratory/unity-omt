@@ -1,3 +1,5 @@
+using System;
+using System.IO;
 using System.Runtime.InteropServices;
 using NUnit.Framework;
 using OpenMediaTransport.Interop;
@@ -30,6 +32,30 @@ namespace OpenMediaTransport.Tests
             Assert.AreEqual(0x41524742, (int)OmtCodec.BGRA);
             Assert.AreEqual(0x31584D56, (int)OmtCodec.VMX1);
             Assert.AreEqual(2, (int)OmtPreferredVideoFormat.BGRA);
+        }
+
+        [Test]
+        public void DefaultLogPathUsesOmtLogsDirectory()
+        {
+            var previous = Environment.GetEnvironmentVariable(OmtStorage.StoragePathEnv);
+            var root = Path.Combine(Path.GetTempPath(), "omt-log-test-" + Guid.NewGuid().ToString("N"));
+            try
+            {
+                Environment.SetEnvironmentVariable(OmtStorage.StoragePathEnv, root);
+                var path = OmtStorage.DefaultLogFilePath();
+                StringAssert.StartsWith(Path.Combine(root, "logs"), path);
+                StringAssert.EndsWith(".log", path);
+                StringAssert.Contains(ProcessIdStem(), Path.GetFileName(path));
+            }
+            finally
+            {
+                Environment.SetEnvironmentVariable(OmtStorage.StoragePathEnv, previous);
+            }
+        }
+
+        static string ProcessIdStem()
+        {
+            return System.Diagnostics.Process.GetCurrentProcess().Id.ToString();
         }
 
         [Test]
